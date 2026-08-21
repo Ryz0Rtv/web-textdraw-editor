@@ -6,7 +6,7 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/web-textdraw-editor/',
+  base: process.env.VERCEL ? '/' : '/web-textdraw-editor/',
   plugins: [
     vue(),
     vueDevTools(),
