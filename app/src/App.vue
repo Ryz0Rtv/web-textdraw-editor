@@ -1,5 +1,5 @@
 <template>
-  <div class="app" @mousemove="onMove" @mouseup="onUp">
+  <div class="app" @pointermove="onMove" @pointerup="onUp" @pointercancel="onUp">
 
     <!-- TOPBAR -->
     <div class="topbar">
@@ -8,34 +8,42 @@
         <span class="logo-text"><em>TextDraw Designer</em></span>
       </div>
 
-      <div style="flex:1" />
+      <div class="desktop-toolbar">
+        <div style="flex:1" />
 
-      <span class="bar-label">BG</span>
-      <input type="range" min="0" max="100" v-model.number="bgOpacity" class="slider" style="width:60px" />
+        <span class="bar-label">BG</span>
+        <input type="range" min="0" max="100" v-model.number="bgOpacity" class="slider" style="width:60px" />
 
-      <div class="sep" />
+        <div class="sep" />
 
-      <span class="bar-label">Zoom</span>
-      <input type="range" min="50" max="500" step="10"
-        :value="Math.round((zoom-1)*100)"
-        @input="zoom = +$event.target.value/100+1"
-        class="slider" style="width:80px" />
-      <span class="zoom-val">{{ Math.round((zoom-1)*100) }}%</span>
+        <span class="bar-label">Zoom</span>
+        <input type="range" min="50" max="500" step="10"
+          :value="Math.round((zoom-1)*100)"
+          @input="zoom = +$event.target.value/100+1"
+          class="slider" style="width:80px" />
+        <span class="zoom-val">{{ Math.round((zoom-1)*100) }}%</span>
 
-      <div class="sep" />
+        <div class="sep" />
 
-      <button class="btn" @click="store.undo()">Undo</button>
-      <button class="btn" @click="store.redo()">Redo</button>
-      <div class="sep" />
-      <button class="btn" @click="onOpenProjects">Projects</button>
-      <button class="btn" @click="onOpenJson">Import</button>
-      <button class="btn primary" @click="onExport">Export Pawn</button>
+        <button class="btn" @click="store.undo()">Undo</button>
+        <button class="btn" @click="store.redo()">Redo</button>
+        <div class="sep" />
+        <button class="btn" @click="onOpenProjects">Projects</button>
+        <button class="btn" @click="onOpenJson">Import</button>
+        <button class="btn primary" @click="onExport">Export Pawn</button>
+      </div>
+
+      <div class="mobile-top-actions">
+        <button class="btn" @click="toggleMobilePanel('left')">Tools</button>
+        <button class="btn" :disabled="!hasSelection" @click="toggleMobilePanel('right')">Properties</button>
+      </div>
     </div>
 
 
     <!-- BODY -->
     <div class="body">
       <LeftPanel
+        :class="{ open: mobilePanel === 'left' }"
         :sorted="sorted"
         :selected="selected"
         :warnings="warnings"
@@ -98,6 +106,7 @@
       </div>
 
       <RightPanel
+        :class="{ open: mobilePanel === 'right' }"
         :selOne="selOne"
         :selArr="selArr"
         :selRefObj="selRefObj"
@@ -112,6 +121,32 @@
         @batch-rename="onBatchRename"
         @update-multi="onUpdateMulti"
       />
+
+      <button
+        v-if="mobilePanel"
+        class="mobile-backdrop"
+        aria-label="Close mobile panel"
+        @pointerdown.stop.prevent="mobilePanel = null"
+      />
+    </div>
+
+    <div class="mobile-dock" aria-label="Mobile editor controls">
+      <div class="mobile-dock-row">
+        <button class="btn" @click="zoomBy(-25)">Zoom −</button>
+        <span class="mobile-zoom">{{ Math.round((zoom - 1) * 100) }}%</span>
+        <button class="btn" @click="zoomBy(25)">Zoom +</button>
+        <button class="btn" @click="store.undo()">Undo</button>
+        <button class="btn" @click="store.redo()">Redo</button>
+        <button class="btn primary" @click="onExport">Export</button>
+      </div>
+      <div v-if="hasSelection" class="mobile-dock-row selection-actions">
+        <button class="btn" @click="nudgeActive(-1, 0)" aria-label="Move left">←</button>
+        <button class="btn" @click="nudgeActive(1, 0)" aria-label="Move right">→</button>
+        <button class="btn" @click="nudgeActive(0, -1)" aria-label="Move up">↑</button>
+        <button class="btn" @click="nudgeActive(0, 1)" aria-label="Move down">↓</button>
+        <button class="btn" @click="store.duplicate()">Duplicate</button>
+        <button class="btn danger" @click="store.deleteSelected()">Delete</button>
+      </div>
     </div>
 
     <ExportModal :show="showExport" :code="exportCode" :prefix="prefix" @close="showExport = false" />
@@ -218,6 +253,7 @@ const canvasWrap = ref(null)
 const projectsApi = useProjects()
 const githubAuth = useGithubAuth()
 const showProjects = ref(false)
+const mobilePanel = ref(null)
 
 const selRefObj = computed(() =>
   refImages.selRef.value
@@ -232,11 +268,20 @@ const selArr   = computed(() => store.selArr.value)
 const elCount  = computed(() => store.els.value.length)
 const warnings = computed(() => validation.warnings.value)
 const refs     = computed(() => refImages.refs.value)
+const hasSelection = computed(() => Boolean(selRefObj.value || selArr.value.length))
 const selRef   = computed(() => refImages.selRef.value)
 const bgImage  = computed(() => bgImg.bgImage.value)
 
 function openGithub() {
   window.open('https://github.com/San-Andreas-Online', '_blank')
+}
+
+function toggleMobilePanel(panel) {
+  mobilePanel.value = mobilePanel.value === panel ? null : panel
+}
+
+function zoomBy(delta) {
+  zoom.value = Math.min(6, Math.max(1, zoom.value + delta / 100))
 }
 
 function onNotify(msg, type = 'info') {
@@ -332,6 +377,29 @@ function onCtxAction(action) {
   else if (action === 'pasteStyle') onPasteStyle()
   else if (action === 'toggleLock')    store.updEl(store.selOne.value.id, { locked: !store.selOne.value.locked })
   else if (action === 'toggleVisible') store.updEl(store.selOne.value.id, { visible: !store.selOne.value.visible })
+}
+
+function nudgeActive(dx, dy) {
+  if (selRefObj.value) {
+    const r = (v) => Math.round(v * 10) / 10
+    refImages.update(selRefObj.value.id, {
+      x: Math.max(0, r(selRefObj.value.x + dx)),
+      y: Math.max(0, Math.min(CH - selRefObj.value.h, r(selRefObj.value.y + dy))),
+    })
+    return
+  }
+
+  if (!store.selected.value.size) return
+  const r = (v) => Math.round(v * 10) / 10
+  const next = store.els.value.map(el => {
+    if (!store.selected.value.has(el.id)) return el
+    return {
+      ...el,
+      x: Math.max(0, r(el.x + dx)),
+      y: Math.max(0, Math.min(CH - el.h, r(el.y + dy))),
+    }
+  })
+  store.commitEls(next)
 }
 
 function onAddElement(type) {
@@ -639,9 +707,7 @@ useKeyboard({
     })
   },
   selRef: refImages.selRef,
-  zoomBy: (delta) => {
-    zoom.value = Math.min(6, Math.max(1, zoom.value + delta / 100))
-  }
+  zoomBy
 })
 
 </script>
@@ -717,6 +783,20 @@ body { overflow: hidden; }
 .logo-text em {
   font-style: normal;
   color: var(--accent);
+}
+
+.desktop-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-top-actions,
+.mobile-dock,
+.mobile-backdrop {
+  display: none;
 }
 
 .sep {
@@ -897,4 +977,142 @@ body { overflow: hidden; }
   position: relative;
   overflow: hidden;
 }
+
+@media (max-width: 760px) {
+  body { overflow: hidden; }
+
+  .app {
+    font-size: 12px;
+  }
+
+  .topbar {
+    height: 48px;
+    padding: 0 8px;
+    gap: 8px;
+  }
+
+  .logo-text {
+    font-size: 11px;
+  }
+
+  .desktop-toolbar {
+    display: none;
+  }
+
+  .mobile-top-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+  }
+
+  .mobile-top-actions .btn,
+  .mobile-dock .btn {
+    min-height: 34px;
+    padding: 7px 10px;
+    font-size: 11px;
+  }
+
+  .body {
+    position: relative;
+  }
+
+  :deep(.left-panel),
+  :deep(.right-panel) {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 120;
+    width: min(86vw, 320px);
+    max-width: 320px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.55);
+    transform: translateX(-110%);
+    transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  :deep(.left-panel) {
+    left: 0;
+    border-right: 1px solid var(--border2);
+  }
+
+  :deep(.right-panel) {
+    right: 0;
+    border-left: 1px solid var(--border2);
+    transform: translateX(110%);
+  }
+
+  :deep(.left-panel.open),
+  :deep(.right-panel.open) {
+    transform: translateX(0);
+  }
+
+  .mobile-backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 110;
+    width: 100%;
+    border: 0;
+    background: rgba(0,0,0,0.58);
+  }
+
+  .canvas-wrap {
+    width: 100%;
+  }
+
+  .mobile-dock {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex-shrink: 0;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    background: var(--bg1);
+    border-top: 1px solid var(--border2);
+    overflow-x: auto;
+  }
+
+  .mobile-dock-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: max-content;
+  }
+
+  .mobile-zoom {
+    min-width: 42px;
+    text-align: center;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .selection-actions {
+    justify-content: center;
+  }
+
+  .btn.danger {
+    color: #fff;
+    background: #8e263c;
+    border-color: #b6425b;
+  }
+
+  .slider {
+    min-height: 22px;
+  }
+
+  :deep(.tab) {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+  }
+
+  :deep(.left-panel .warnings) {
+    max-height: 160px;
+  }
+}
+
+@media (min-width: 761px) {
+  .mobile-backdrop { display: none !important; }
+}
+
 </style>

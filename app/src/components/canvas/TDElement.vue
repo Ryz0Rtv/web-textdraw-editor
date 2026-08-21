@@ -3,7 +3,7 @@
       v-if="el.visible"
       class="td-element"
       :style="wrapperStyle"
-      @mousedown.stop="onMouseDown"
+      @pointerdown.stop="onPointerDown"
       @contextmenu.stop.prevent="emit('contextmenu', $event, el)"
     >
       <!-- Sprite -->
@@ -52,7 +52,7 @@
         <div
           v-if="!el.locked"
           class="resize-handle-global"
-          @mousedown.stop="onResizeStart"
+          @pointerdown.stop="onResizeStart"
         />
       </div>
     </Teleport>
@@ -70,7 +70,7 @@
     zoom: { type: Number, default: 1 },
   })
 
-  const emit = defineEmits(['mousedown', 'resize-start', 'contextmenu'])
+  const emit = defineEmits(['pointerdown', 'resize-start', 'contextmenu'])
 
   const imgFailed = ref(false)
   const localPath = ref(null)
@@ -545,14 +545,16 @@
     display: wrappedLines.value?.length > 1 ? 'block' : 'inline-block',
   }))
 
-  function onMouseDown(e) {
+  function onPointerDown(e) {
     if (e.button !== 0) return
     if (props.el.locked) return
-    emit('mousedown', e, props.el)
+    e.currentTarget?.setPointerCapture?.(e.pointerId)
+    emit('pointerdown', e, props.el)
   }
 
   function onResizeStart(e) {
     if (e.button !== 0) return
+    e.currentTarget?.setPointerCapture?.(e.pointerId)
     emit('resize-start', e, props.el)
   }
 
@@ -584,6 +586,7 @@
   .td-element {
     position: absolute;
     pointer-events: all;
+    touch-action: none;
   }
   .fill {
     width: 100%;

@@ -3,7 +3,7 @@
     v-if="r.visible"
     class="ref-image"
     :style="wrapperStyle"
-    @mousedown.stop="onMouseDown"
+    @pointerdown.stop="onPointerDown"
   >
     <img :src="r.src" :alt="r.name" class="ref-img" draggable="false" />
 
@@ -16,7 +16,7 @@
     <div
       v-if="selected && !r.locked"
       class="resize-handle"
-      @mousedown.stop="onResizeStart"
+      @pointerdown.stop="onResizeStart"
     />
   </div>
 </template>
@@ -30,7 +30,7 @@ const props = defineProps({
   zoom:     { type: Number, default: 1 },
 })
 
-const emit = defineEmits(['mousedown', 'resize-start'])
+const emit = defineEmits(['pointerdown', 'resize-start'])
 
 const wrapperStyle = computed(() => ({
   left:    props.r.x * props.zoom + 'px',
@@ -46,13 +46,15 @@ const wrapperStyle = computed(() => ({
   zIndex: 2,
 }))
 
-function onMouseDown(e) {
+function onPointerDown(e) {
   if (e.button !== 0 || props.r.locked) return
-  emit('mousedown', e, props.r)
+  e.currentTarget?.setPointerCapture?.(e.pointerId)
+  emit('pointerdown', e, props.r)
 }
 
 function onResizeStart(e) {
   if (e.button !== 0) return
+  e.currentTarget?.setPointerCapture?.(e.pointerId)
   emit('resize-start', e, props.r)
 }
 </script>
@@ -62,6 +64,7 @@ function onResizeStart(e) {
   position: absolute;
   box-sizing: border-box;
   pointer-events: all;
+  touch-action: none;
 }
 .ref-img {
   width: 100%;
@@ -99,6 +102,7 @@ function onResizeStart(e) {
   position: absolute;
   width: 8px;
   height: 8px;
+  touch-action: none;
   bottom: -4px;
   right: -4px;
   background: #804000;

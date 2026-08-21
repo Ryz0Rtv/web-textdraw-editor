@@ -5,7 +5,10 @@
         ref="cvRef"
         class="canvas"
         :style="canvasStyle"
-        @mousedown="onCanvasMouseDown"
+        @pointerdown="onCanvasPointerDown"
+        @pointermove="onCanvasPointerMove"
+        @pointerup="onCanvasPointerUp"
+        @pointercancel="onCanvasPointerUp"
         @contextmenu.prevent="e => emit('contextmenu', e)"
         @dragover.prevent
         @drop="onDrop"
@@ -22,7 +25,7 @@
             :r="r"
             :selected="selRef === r.id"
             :zoom="zoom"
-            @mousedown="(e, r) => emit('ref-mousedown', e, r)"
+            @pointerdown="(e, r) => emit('ref-mousedown', e, r)"
             @resize-start="(e, r) => emit('ref-resize-start', e, r)"
           />
         </div>
@@ -35,7 +38,7 @@
             :el="el"
             :selected="selected.has(el.id)"
             :zoom="zoom"
-            @mousedown="(e, el) => emit('el-mousedown', e, el)"
+            @pointerdown="(e, el) => emit('el-mousedown', e, el)"
             @contextmenu="(e, el) => emit('contextmenu', e, el)"
             @resize-start="(e, el) => emit('el-resize-start', e, el)"
           />
@@ -103,6 +106,8 @@ const emit = defineEmits([
 ])
 
 const cvRef = ref(null)
+const panning = ref(false)
+const panStart = ref({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 })
 
 const canvasStyle = computed(() => ({
   width:  CW * props.zoom + 'px',
@@ -120,9 +125,33 @@ function canvasPos(e)
   }
 }
 
-function onCanvasMouseDown(e) {
+function onCanvasPointerDown(e) {
   if (e.button !== 0) return
+  if (e.pointerType === 'touch') {
+    const scroll = e.currentTarget.parentElement
+    panning.value = true
+    panStart.value = {
+      x: e.clientX,
+      y: e.clientY,
+      scrollLeft: scroll.scrollLeft,
+      scrollTop: scroll.scrollTop,
+    }
+    e.currentTarget?.setPointerCapture?.(e.pointerId)
+    e.preventDefault()
+    return
+  }
   emit('canvas-mousedown', e, canvasPos(e))
+}
+
+function onCanvasPointerMove(e) {
+  if (!panning.value) return
+  const scroll = e.currentTarget.parentElement
+  scroll.scrollLeft = panStart.value.scrollLeft - (e.clientX - panStart.value.x)
+  scroll.scrollTop = panStart.value.scrollTop - (e.clientY - panStart.value.y)
+}
+
+function onCanvasPointerUp() {
+  panning.value = false
 }
 
 function onDrop(e) {
@@ -143,6 +172,7 @@ defineExpose({ canvasPos })
   width: 100%;
   height: 100%;
   overflow: auto;
+  touch-action: pan-x pan-y;
 }
 .canvas-padding {
   padding: 24px;
@@ -151,6 +181,7 @@ defineExpose({ canvasPos })
 .canvas {
   position: relative;
   cursor: crosshair;
+  touch-action: none;
   box-shadow: 0 0 0 1px var(--border2), 0 8px 32px rgba(0,0,0,0.6);
   overflow: hidden;
 }
